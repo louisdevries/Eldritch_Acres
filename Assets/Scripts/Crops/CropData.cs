@@ -52,6 +52,41 @@ namespace EldritchFarm.Crops
                  "time to mean something instead of immediately reverting to Idle.")]
         public float alertHoldDuration = 3f;
 
+        [Header("Chain Decay")]
+        [Tooltip("Multiplier applied to scream intensity when this crop relays a scream. " +
+                 "0.7 means each link in the chain is 70% as loud as the previous one. " +
+                 "Lower = chains die faster. Higher = chains travel further.")]
+        [Range(0.1f, 1f)]
+        public float chainIntensityDecay = 0.7f;
+
+        [Tooltip("Minimum scream intensity required to relay onward. Screams below this " +
+                 "are heard (still cause Alert) but don't trigger a re-scream. " +
+                 "Higher = chains die sooner.")]
+        [Range(0.05f, 1f)]
+        public float chainIntensityThreshold = 0.3f;
+
+        [Header("Movement (for crops that move when reacting)")]
+        [Tooltip("Speed in units/second when fleeing.")]
+        public float fleeSpeed = 3f;
+
+        [Tooltip("How long the crop flees before stopping.")]
+        public float fleeDuration = 1.2f;
+
+        [Header("Harvestable Skittishness (for fled crops still on the ground)")]
+        [Tooltip("Speed multiplier applied to flees triggered while harvestable. " +
+                 "0.5 = half speed. The crop is tired but still nervous.")]
+        [Range(0.1f, 1f)]
+        public float harvestableFleeSpeedMultiplier = 0.5f;
+
+        [Tooltip("Duration multiplier applied to flees triggered while harvestable. " +
+                 "0.5 = scoots half as long.")]
+        [Range(0.1f, 1f)]
+        public float harvestableFleeDurationMultiplier = 0.5f;
+
+        [Tooltip("Reaction radius for harvestable crops. Usually smaller than the main one — " +
+                 "a tomato on the ground won't bolt until the player is right on top of it.")]
+        public float harvestableReactionRadius = 1f;
+
         [Header("Growth")]
         [Tooltip("Seconds from planting to harvestable.")]
         public float growthTimeSeconds = 30f;

@@ -16,29 +16,48 @@ public class PlayerInteraction : MonoBehaviour
 
     private GameObject ghostInstance;
     private Renderer ghostRenderer;
-
-    // -----------------------------
-    // FIX: stable ghost scaling
-    // -----------------------------
     private Vector3 ghostBaseScale;
+
+    // Cached "do we have everything to run the ghost system?" check.
+    // Lets the script tolerate missing references without throwing, useful while
+    // the scene is being set up incrementally.
+    private bool HasGhost => ghostInstance != null && ghostRenderer != null;
+    private bool HasCropPrefabs => cropPrefabs != null && cropPrefabs.Length > 0;
+    private bool HasFarmGrid => farmGrid != null;
 
     void Start()
     {
-        ghostInstance = Instantiate(ghostPrefab);
-        ghostRenderer = ghostInstance.GetComponentInChildren<Renderer>();
+        if (ghostPrefab != null)
+        {
+            ghostInstance = Instantiate(ghostPrefab);
+            ghostRenderer = ghostInstance.GetComponentInChildren<Renderer>();
+            ghostBaseScale = ghostInstance.transform.localScale;
 
-        ghostBaseScale = ghostInstance.transform.localScale;
+            // Position ghost on first frame so it doesn't pop in at origin.
+            if (HasFarmGrid)
+            {
+                Vector3 forwardPosition = transform.position + transform.forward * interactDistance;
+                forwardPosition.y = 0;
 
-        // Position ghost properly on first frame so it doesn't pop
-        Vector3 forwardPosition = transform.position + transform.forward * interactDistance;
-        forwardPosition.y = 0;
+                Vector2Int gridPos = farmGrid.WorldToGrid(forwardPosition);
+                Vector3 snappedPos = farmGrid.GridToWorld(gridPos);
 
-        Vector2Int gridPos = farmGrid.WorldToGrid(forwardPosition);
-        Vector3 snappedPos = farmGrid.GridToWorld(gridPos);
+                ghostInstance.transform.position = snappedPos;
+                ghostInstance.transform.rotation = Quaternion.identity;
+            }
 
-        ghostInstance.transform.position = snappedPos;
-        ghostInstance.transform.rotation = Quaternion.identity;
-        UpdateGhostVisual();
+            UpdateGhostVisual();
+        }
+        else
+        {
+            Debug.LogWarning("[PlayerInteraction] No ghostPrefab assigned — ghost preview disabled.");
+        }
+
+        if (!HasCropPrefabs)
+            Debug.LogWarning("[PlayerInteraction] No cropPrefabs assigned — planting disabled.");
+
+        if (!HasFarmGrid)
+            Debug.LogWarning("[PlayerInteraction] No farmGrid assigned — planting/tilling disabled.");
     }
 
     void Update()
@@ -46,19 +65,13 @@ public class PlayerInteraction : MonoBehaviour
         UpdateGhost();
 
         if (Input.GetKeyDown(KeyCode.E))
-        {
             TryPlant();
-        }
 
         if (Input.GetKeyDown(KeyCode.F))
-        {
             TryTill();
-        }
 
         if (Input.GetKeyDown(KeyCode.Q))
-        {
             CycleCrop();
-        }
     }
 
     // -----------------------------
@@ -66,6 +79,8 @@ public class PlayerInteraction : MonoBehaviour
     // -----------------------------
     void UpdateGhost()
     {
+        if (!HasGhost || !HasFarmGrid) return;
+
         Vector3 forwardPosition = transform.position + transform.forward * interactDistance;
         forwardPosition.y = 0;
 
@@ -78,38 +93,21 @@ public class PlayerInteraction : MonoBehaviour
         bool canPlant = CanPlantAt(gridPos);
         var state = farmGrid.GetTile(gridPos);
 
-        // -----------------------------
-        // COLOR FEEDBACK
-        // -----------------------------
-        if (ghostRenderer != null)
-        {
-            Color color;
+        // Color feedback
+        Color color;
+        if (state == null)
+            color = new Color(1f, 0.5f, 0f, 0.5f); // orange = untilled
+        else if (state == FarmGrid.TileState.Occupied)
+            color = new Color(1f, 0f, 0f, 0.5f);   // red
+        else if (canPlant)
+            color = new Color(0f, 1f, 0f, 0.5f);   // green
+        else
+            color = new Color(1f, 0f, 0f, 0.5f);
 
-            if (state == null)
-            {
-                color = new Color(1f, 0.5f, 0f, 0.5f); // orange = untilled
-            }
-            else if (state == FarmGrid.TileState.Occupied)
-            {
-                color = new Color(1f, 0f, 0f, 0.5f); // red
-            }
-            else if (canPlant)
-            {
-                color = new Color(0f, 1f, 0f, 0.5f); // green
-            }
-            else
-            {
-                color = new Color(1f, 0f, 0f, 0.5f);
-            }
+        ghostRenderer.material.color = color;
 
-            ghostRenderer.material.color = color;
-        }
-
-        // -----------------------------
-        // SMOOTH SCALING
-        // -----------------------------
+        // Smooth scaling
         float targetScale = canPlant ? 1f : 0.9f;
-
         ghostInstance.transform.localScale = Vector3.Lerp(
             ghostInstance.transform.localScale,
             ghostBaseScale * targetScale,
@@ -125,12 +123,7 @@ public class PlayerInteraction : MonoBehaviour
         Vector3 forwardPosition = transform.position + transform.forward * interactDistance;
         forwardPosition.y = 0;
 
-        Vector2Int gridPos = farmGrid.WorldToGrid(forwardPosition);
-        Vector3 snappedPos = farmGrid.GridToWorld(gridPos);
-
-        // -----------------------------
-        // HARVEST FIRST
-        // -----------------------------
+        // Harvest first — works even without farmGrid or cropPrefabs configured.
         Collider[] colliders = Physics.OverlapSphere(forwardPosition, 1f);
 
         foreach (Collider col in colliders)
@@ -139,59 +132,59 @@ public class PlayerInteraction : MonoBehaviour
 
             if (crop != null && crop.CanHarvest())
             {
-                Vector2Int tile = farmGrid.WorldToGrid(crop.transform.position);
-
                 cropCount += crop.Harvest();
 
-                farmGrid.SetTile(tile, FarmGrid.TileState.Tilled);
+                if (HasFarmGrid)
+                {
+                    Vector2Int tile = farmGrid.WorldToGrid(crop.transform.position);
+                    farmGrid.SetTile(tile, FarmGrid.TileState.Tilled);
+                }
 
                 Destroy(crop.gameObject);
                 return;
             }
         }
 
-        // -----------------------------
-        // PLANTING
-        // -----------------------------
+        // Planting requires both farmGrid and a crop prefab.
+        if (!HasFarmGrid || !HasCropPrefabs) return;
+
+        Vector2Int gridPos = farmGrid.WorldToGrid(forwardPosition);
+        Vector3 snappedPos = farmGrid.GridToWorld(gridPos);
+
         if (CanPlantAt(gridPos))
         {
             GameObject prefab = cropPrefabs[currentCropIndex];
+            if (prefab == null) return;
+
             Instantiate(prefab, snappedPos, Quaternion.identity);
             farmGrid.SetTile(gridPos, FarmGrid.TileState.Occupied);
         }
     }
 
-    // -----------------------------
-    // TILLING
-    // -----------------------------
     void TryTill()
     {
+        if (!HasFarmGrid) return;
+
         Vector3 pos = transform.position + transform.forward * interactDistance;
         Vector2Int tile = farmGrid.WorldToGrid(pos);
 
         if (farmGrid.GetTile(tile) == null)
-        {
             farmGrid.SetTile(tile, FarmGrid.TileState.Tilled);
-        }
     }
 
-    // -----------------------------
-    // PLANT RULES
-    // -----------------------------
     bool CanPlantAt(Vector2Int tile)
     {
+        if (!HasFarmGrid) return false;
+
         var state = farmGrid.GetTile(tile);
+        if (state != FarmGrid.TileState.Tilled) return false;
 
-        if (state != FarmGrid.TileState.Tilled)
-            return false;
-
-        // spacing rule
+        // Spacing rule
         for (int x = -1; x <= 1; x++)
         {
             for (int z = -1; z <= 1; z++)
             {
                 Vector2Int check = tile + new Vector2Int(x, z);
-
                 if (farmGrid.GetTile(check) == FarmGrid.TileState.Occupied)
                     return false;
             }
@@ -202,43 +195,35 @@ public class PlayerInteraction : MonoBehaviour
 
     void CycleCrop()
     {
-        if (cropPrefabs == null || cropPrefabs.Length == 0) return;
+        if (!HasCropPrefabs) return;
 
-        currentCropIndex++;
-        if (currentCropIndex >= cropPrefabs.Length)
-            currentCropIndex = 0;
-
+        currentCropIndex = (currentCropIndex + 1) % cropPrefabs.Length;
         UpdateGhostVisual();
     }
 
     void UpdateGhostVisual()
     {
-        if (ghostInstance == null) return;
+        if (!HasGhost || !HasCropPrefabs) return;
 
-        // destroy old mesh
+        // Destroy old mesh children
         foreach (Transform child in ghostInstance.transform)
-        {
             Destroy(child.gameObject);
-        }
 
         GameObject prefab = cropPrefabs[currentCropIndex];
+        if (prefab == null) return;
 
-        // copy visual from crop prefab
+        // Copy visual from crop prefab
         GameObject visual = Instantiate(prefab, ghostInstance.transform);
 
-        // remove gameplay scripts
+        // Strip gameplay scripts so the ghost doesn't accidentally run AI
         foreach (var comp in visual.GetComponentsInChildren<MonoBehaviour>())
-        {
             Destroy(comp);
-        }
 
-        // remove colliders
-        foreach (var col in visual.GetComponentsInChildren<Collider>())
-        {
-            Destroy(col);
-        }
+        // Strip colliders so the ghost doesn't get harvested or block the player
+        foreach (var c in visual.GetComponentsInChildren<Collider>())
+            Destroy(c);
 
-        // make transparent
+        // Make transparent
         Renderer[] rends = visual.GetComponentsInChildren<Renderer>();
         foreach (var r in rends)
         {
@@ -262,7 +247,7 @@ public class PlayerInteraction : MonoBehaviour
 
     void OnGUI()
     {
-        if (cropPrefabs != null && cropPrefabs.Length > 0)
+        if (HasCropPrefabs && cropPrefabs[currentCropIndex] != null)
         {
             GUI.Label(new Rect(10, 10, 300, 20),
                 "Selected Crop: " + cropPrefabs[currentCropIndex].name + " (Q to switch)");

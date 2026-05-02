@@ -26,6 +26,11 @@ namespace EldritchFarm.Crops
         // check in Alert sees no player and bounces back to Idle.
         private float alertHoldUntilTime = 0f;
 
+        // Intensity to use for the next scream this corn raises. Defaults to 1.0
+        // (a self-triggered scream from the player), but is reduced when the scream
+        // is a chain reaction — that's how the chain naturally damps over distance.
+        private float pendingScreamIntensity = 1f;
+
         protected override void OnEnable()
         {
             base.OnEnable();
@@ -55,17 +60,37 @@ namespace EldritchFarm.Crops
         {
             if (evt.Source == this) return;
             if (!IsWithinRange(evt.Position, evt.Radius)) return;
+            if (data == null) return;
 
             // Sound-alerted: hold the Alert state for a moment regardless of
             // player position. Refreshes if we're already alert and hear another scream.
-            if (data != null)
-                alertHoldUntilTime = Time.time + data.alertHoldDuration;
+            alertHoldUntilTime = Time.time + data.alertHoldDuration;
 
+            // Compute the intensity this corn would relay if it screamed.
+            float relayedIntensity = evt.Intensity * data.chainIntensityDecay;
+
+            // If the relayed scream would be too quiet, don't propagate the chain
+            // any further. The corn still reacts (goes Alert if it was Idle), but
+            // it doesn't add a new link to the chain.
+            bool willRelay = relayedIntensity >= data.chainIntensityThreshold;
+
+            // Bring an idle corn to Alert at minimum.
             if (CurrentState == CropState.Idle)
             {
                 if (logStateTransitions)
                     Debug.Log($"[{InstanceId}] heard {evt.Source.InstanceId} scream", this);
                 TransitionTo(CropState.Alert);
+            }
+
+            // If the scream is loud enough AND we've recovered from our last scream,
+            // re-broadcast it onward through this corn. This is what keeps the chain alive.
+            if (willRelay
+                && Time.time - lastReactionTime >= data.rescreamCooldown
+                && CurrentState != CropState.Reacting
+                && CurrentState != CropState.Distressed)
+            {
+                pendingScreamIntensity = relayedIntensity;
+                TransitionTo(CropState.Reacting);
             }
         }
 
@@ -126,7 +151,10 @@ namespace EldritchFarm.Crops
             if (state == CropState.Reacting)
             {
                 lastReactionTime = Time.time;
-                RaiseScream(intensity: 1f);
+                RaiseScream(intensity: pendingScreamIntensity);
+                // Reset for next time. If the next reaction is player-triggered
+                // (not chain-triggered), it should be a fresh full-intensity scream.
+                pendingScreamIntensity = 1f;
             }
         }
 
