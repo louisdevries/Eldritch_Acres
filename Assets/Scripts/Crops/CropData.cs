@@ -87,6 +87,28 @@ namespace EldritchFarm.Crops
                  "a tomato on the ground won't bolt until the player is right on top of it.")]
         public float harvestableReactionRadius = 1f;
 
+        [Header("Aggression (for crops that attack)")]
+        [Tooltip("Seconds the crop spends winding up before striking. This is the player's " +
+                 "window to react and dodge — the telegraph is the gameplay.")]
+        public float windupDuration = 0.6f;
+
+        [Tooltip("Seconds the strike is active. Brief — the actual impact frame.")]
+        public float strikeDuration = 0.15f;
+
+        [Tooltip("Radius of the strike hit-check, measured from the crop's position.")]
+        public float strikeRadius = 1.8f;
+
+        [Tooltip("Half-angle of the strike cone in degrees. 45 means the strike covers a 90° arc " +
+                 "in front of the crop. Lower = more directional, easier to dodge sideways.")]
+        [Range(15f, 180f)]
+        public float strikeHalfAngleDegrees = 45f;
+
+        [Tooltip("Force applied to the player on a successful hit (knockback magnitude).")]
+        public float strikeKnockback = 8f;
+
+        [Tooltip("Seconds the crop is unable to attack again after striking.")]
+        public float attackRecoveryDuration = 1.5f;
+
         [Header("Growth")]
         [Tooltip("Seconds from planting to harvestable.")]
         public float growthTimeSeconds = 30f;

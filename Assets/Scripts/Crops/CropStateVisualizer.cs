@@ -23,6 +23,7 @@ namespace EldritchFarm.Crops
         [SerializeField] private Color idleColor       = Color.white;
         [SerializeField] private Color alertColor      = Color.yellow;
         [SerializeField] private Color reactingColor   = Color.red;
+        [SerializeField] private Color strikingColor   = new Color(1f, 0f, 1f); // magenta
         [SerializeField] private Color distressedColor = new Color(1f, 0.5f, 0f); // orange
         [SerializeField] private Color harvestableColor = Color.green;
         [SerializeField] private Color spentColor      = Color.gray;
@@ -88,6 +89,7 @@ namespace EldritchFarm.Crops
             {
                 case CropState.Alert:       return alertColor;
                 case CropState.Reacting:    return reactingColor;
+                case CropState.Striking:    return strikingColor;
                 case CropState.Distressed:  return distressedColor;
                 case CropState.Harvestable: return harvestableColor;
                 case CropState.Spent:       return spentColor;

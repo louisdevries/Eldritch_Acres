@@ -9,7 +9,8 @@ namespace EldritchFarm.Crops
     {
         Idle,           // Default — passive, growing, doing crop things
         Alert,          // Something noticed (player nearby, neighbor screamed)
-        Reacting,       // Actively expressing behavior (screaming, attacking, fleeing)
+        Reacting,       // Actively expressing behavior (screaming, fleeing, winding up)
+        Striking,       // Mid-attack — the actual moment of impact (for aggressive crops)
         Distressed,     // Over-stimulated, may chain-react further
         Harvestable,    // Ready to be collected
         Spent           // Post-harvest / dormant
