@@ -1,29 +1,63 @@
 using UnityEngine;
 
-[CreateAssetMenu(fileName = "NewCropData", menuName = "Farming/Crop Data")]
-public class CropData : ScriptableObject
+namespace EldritchFarm.Crops
 {
-    [Header("Identity")]
-    public string cropName;
+    /// <summary>
+    /// Per-crop-type configuration. Create assets via:
+    /// Assets > Create > Eldritch Farm > Crop Data
+    ///
+    /// Designer-tunable values live here. Behavior logic lives in CropBehavior subclasses.
+    /// </summary>
+    [CreateAssetMenu(fileName = "NewCropData", menuName = "Eldritch Farm/Crop Data", order = 0)]
+    public class CropData : ScriptableObject
+    {
+        [Header("Identity")]
+        [Tooltip("Display name used in UI and debug logs.")]
+        public string cropName = "Unnamed Crop";
 
-    [Header("Growth")]
-    public float growTime = 5f;
+        [TextArea(2, 4)]
+        [Tooltip("Short flavour description — for design reference, not runtime.")]
+        public string description;
 
-    [Header("Corruption")]
-    [Range(0f, 1f)] public float baseCorruptionRate = 0.1f;
-    public float infectionResistance = 1f;   // higher = harder to corrupt
+        [Header("Awareness")]
+        [Tooltip("Radius at which the crop notices the player.")]
+        public float awarenessRadius = 4f;
 
-    [Header("Spread")]
-    public float infectionRadius = 2f;
-    public float visualRadius = 12f;
-    public float crawlSpeed = 0.4f;
+        [Tooltip("Radius at which the crop reacts (screams, attacks, flees, etc.).")]
+        public float reactionRadius = 2f;
 
-    [Header("Visual")]
-    public Color healthyColor = Color.green;
-    public Color sickColor = new Color(0.7f, 0.7f, 0.2f);
-    public Color corruptedColor = new Color(0.6f, 0f, 0.8f);
+        [Header("Chain Reactions")]
+        [Tooltip("Radius at which this crop's reaction alerts neighboring crops.")]
+        public float alertBroadcastRadius = 6f;
 
-    [Header("Yield")]
-    public int normalYield = 1;
-    public int corruptedYield = 3;
+        [Tooltip("Does this crop alert neighbors when it reacts?")]
+        public bool broadcastsAlerts = true;
+
+        [Tooltip("Does this crop respond to neighbors' alerts?")]
+        public bool listensToAlerts = true;
+
+        [Header("Timing")]
+        [Tooltip("Seconds the crop stays in Reacting state before calming down.")]
+        public float reactionDuration = 2f;
+
+        [Tooltip("Seconds the crop must be calm before returning to Idle.")]
+        public float cooldownDuration = 1.5f;
+
+        [Tooltip("Minimum seconds between repeat reactions while the player lingers nearby. " +
+                 "After reacting, the crop has to 'take a breath' before it can react again.")]
+        public float rescreamCooldown = 8f;
+
+        [Tooltip("Seconds the crop stays in Alert after being alerted by sound (e.g. a neighbor's scream), " +
+                 "even if the player isn't actually nearby. Like 'wait, what was that?' — gives the alert " +
+                 "time to mean something instead of immediately reverting to Idle.")]
+        public float alertHoldDuration = 3f;
+
+        [Header("Growth")]
+        [Tooltip("Seconds from planting to harvestable.")]
+        public float growthTimeSeconds = 30f;
+
+        [Header("Harvest")]
+        [Tooltip("How many units this crop yields when harvested cleanly.")]
+        public int yieldAmount = 1;
+    }
 }

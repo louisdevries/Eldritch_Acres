@@ -1,4 +1,5 @@
 using UnityEngine;
+using EldritchFarm.Crops;
 
 public class PlayerInteraction : MonoBehaviour
 {
@@ -8,7 +9,6 @@ public class PlayerInteraction : MonoBehaviour
     public GameObject ghostPrefab;
 
     public float interactDistance = 2f;
-    public float corruption = 0f;
 
     public FarmGrid farmGrid;
 
@@ -29,10 +29,7 @@ public class PlayerInteraction : MonoBehaviour
 
         ghostBaseScale = ghostInstance.transform.localScale;
 
-        // -----------------------------
-        // HIGHLY RECOMMENDED FIX:
-        // ensure ghost is properly positioned immediately
-        // -----------------------------
+        // Position ghost properly on first frame so it doesn't pop
         Vector3 forwardPosition = transform.position + transform.forward * interactDistance;
         forwardPosition.y = 0;
 
@@ -62,8 +59,6 @@ public class PlayerInteraction : MonoBehaviour
         {
             CycleCrop();
         }
-
-        UpdateCorruptionEffects();
     }
 
     // -----------------------------
@@ -81,7 +76,7 @@ public class PlayerInteraction : MonoBehaviour
         ghostInstance.transform.rotation = Quaternion.identity;
 
         bool canPlant = CanPlantAt(gridPos);
-        var state = farmGrid.GetTile(gridPos); // nullable now
+        var state = farmGrid.GetTile(gridPos);
 
         // -----------------------------
         // COLOR FEEDBACK
@@ -140,21 +135,13 @@ public class PlayerInteraction : MonoBehaviour
 
         foreach (Collider col in colliders)
         {
-            Crop crop = col.GetComponent<Crop>();
+            CropBehavior crop = col.GetComponentInParent<CropBehavior>();
 
             if (crop != null && crop.CanHarvest())
             {
                 Vector2Int tile = farmGrid.WorldToGrid(crop.transform.position);
 
-                if (crop.state == Crop.CropState.Corrupted)
-                {
-                    cropCount += crop.data.corruptedYield;
-                    corruption += 0.1f;
-                }
-                else
-                {
-                    cropCount += crop.data.normalYield;
-                }
+                cropCount += crop.Harvest();
 
                 farmGrid.SetTile(tile, FarmGrid.TileState.Tilled);
 
@@ -182,7 +169,7 @@ public class PlayerInteraction : MonoBehaviour
         Vector3 pos = transform.position + transform.forward * interactDistance;
         Vector2Int tile = farmGrid.WorldToGrid(pos);
 
-        if (farmGrid.GetTile(tile) == null) // no tile exists
+        if (farmGrid.GetTile(tile) == null)
         {
             farmGrid.SetTile(tile, FarmGrid.TileState.Tilled);
         }
@@ -195,7 +182,6 @@ public class PlayerInteraction : MonoBehaviour
     {
         var state = farmGrid.GetTile(tile);
 
-        // must exist and be tilled
         if (state != FarmGrid.TileState.Tilled)
             return false;
 
@@ -213,16 +199,6 @@ public class PlayerInteraction : MonoBehaviour
 
         return true;
     }
-
-    // -----------------------------
-    // VISUAL EFFECTS
-    // -----------------------------
-    void UpdateCorruptionEffects()
-    {
-        float fogDensity = Mathf.Lerp(0.01f, 0.05f, corruption);
-        RenderSettings.fogDensity = fogDensity;
-    }
-
 
     void CycleCrop()
     {
@@ -291,5 +267,6 @@ public class PlayerInteraction : MonoBehaviour
             GUI.Label(new Rect(10, 10, 300, 20),
                 "Selected Crop: " + cropPrefabs[currentCropIndex].name + " (Q to switch)");
         }
+        GUI.Label(new Rect(10, 30, 300, 20), "Harvested: " + cropCount);
     }
 }
