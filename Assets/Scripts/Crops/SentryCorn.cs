@@ -3,8 +3,12 @@ using UnityEngine;
 namespace EldritchFarm.Crops
 {
     /// <summary>
-    /// First concrete crop. Watches the player. Screams when approached.
-    /// Other Sentries hearing the scream become alert themselves.
+    /// Watches the player. Screams when approached. Alerts neighbors via the event bus.
+    ///
+    /// Becomes harvestable when grown AND calm for a brief period after any reaction.
+    /// Walking up to grab a calm corn might startle it again — it'll go through its
+    /// scream cycle and re-become harvestable shortly after calming. The growth timer
+    /// doesn't reset when this happens; the corn is grown, just temporarily uncalm.
     /// </summary>
     public class SentryCorn : CropBehavior
     {
@@ -15,20 +19,13 @@ namespace EldritchFarm.Crops
         [Header("Debug")]
         [SerializeField] private bool drawGizmos = true;
 
-        // Tracks when this corn last entered the Reacting state. Used to enforce
-        // the "take a breath" cooldown so the corn doesn't scream continuously
-        // while the player lingers in range.
+        // See CropBehavior — these are gating timers for the rescream cooldown
+        // and the post-scream alert hold.
         private float lastReactionTime = Mathf.NegativeInfinity;
-
-        // When alerted by sound (a neighbor's scream), the corn holds the Alert state
-        // until this time, even if the player isn't actually nearby. Without this, a
-        // sound-triggered alert immediately self-cancels because the player-distance
-        // check in Alert sees no player and bounces back to Idle.
         private float alertHoldUntilTime = 0f;
 
-        // Intensity to use for the next scream this corn raises. Defaults to 1.0
-        // (a self-triggered scream from the player), but is reduced when the scream
-        // is a chain reaction — that's how the chain naturally damps over distance.
+        // Carried-forward intensity for chain decay. Defaults to 1 (full scream)
+        // for player-triggered events; set lower by HandleScream when relaying.
         private float pendingScreamIntensity = 1f;
 
         protected override void OnEnable()
@@ -62,28 +59,19 @@ namespace EldritchFarm.Crops
             if (!IsWithinRange(evt.Position, evt.Radius)) return;
             if (data == null) return;
 
-            // Sound-alerted: hold the Alert state for a moment regardless of
-            // player position. Refreshes if we're already alert and hear another scream.
             alertHoldUntilTime = Time.time + data.alertHoldDuration;
 
-            // Compute the intensity this corn would relay if it screamed.
             float relayedIntensity = evt.Intensity * data.chainIntensityDecay;
-
-            // If the relayed scream would be too quiet, don't propagate the chain
-            // any further. The corn still reacts (goes Alert if it was Idle), but
-            // it doesn't add a new link to the chain.
             bool willRelay = relayedIntensity >= data.chainIntensityThreshold;
 
-            // Bring an idle corn to Alert at minimum.
-            if (CurrentState == CropState.Idle)
+            // Bring an idle/harvestable corn to Alert at minimum.
+            if (CurrentState == CropState.Idle || CurrentState == CropState.Harvestable)
             {
                 if (logStateTransitions)
                     Debug.Log($"[{InstanceId}] heard {evt.Source.InstanceId} scream", this);
                 TransitionTo(CropState.Alert);
             }
 
-            // If the scream is loud enough AND we've recovered from our last scream,
-            // re-broadcast it onward through this corn. This is what keeps the chain alive.
             if (willRelay
                 && Time.time - lastReactionTime >= data.rescreamCooldown
                 && CurrentState != CropState.Reacting
@@ -109,20 +97,26 @@ namespace EldritchFarm.Crops
             switch (state)
             {
                 case CropState.Idle:
+                    // Player approaches → go alert
                     if (sqrDist <= data.awarenessRadius * data.awarenessRadius)
+                    {
                         TransitionTo(CropState.Alert);
+                    }
+                    // No player nearby AND mature AND has been calm long enough → ripen
+                    else if (IsMature && stateTimer >= data.cooldownDuration)
+                    {
+                        TransitionTo(CropState.Harvestable);
+                    }
                     break;
 
                 case CropState.Alert:
                     bool playerOutOfRange = sqrDist > data.awarenessRadius * data.awarenessRadius;
                     bool stillListening = Time.time < alertHoldUntilTime;
 
-                    // Player left AND we're done listening for follow-up sounds — relax.
                     if (playerOutOfRange && !stillListening)
                     {
                         TransitionTo(CropState.Idle);
                     }
-                    // Player got close AND we've had time to recover from the last scream.
                     else if (sqrDist <= data.reactionRadius * data.reactionRadius
                           && Time.time - lastReactionTime >= data.rescreamCooldown)
                     {
@@ -137,9 +131,15 @@ namespace EldritchFarm.Crops
 
                 case CropState.Distressed:
                     if (stateTimer >= data.cooldownDuration)
+                        TransitionTo(CropState.Alert); // back to watchful, may re-trigger
+                    break;
+
+                case CropState.Harvestable:
+                    // A harvestable corn still reacts to the player — getting close to grab it
+                    // will startle it back into the alert/scream cycle. The growth timer doesn't
+                    // reset, so the corn will return to Harvestable quickly after calming.
+                    if (sqrDist <= data.awarenessRadius * data.awarenessRadius)
                     {
-                        // Back to watchful, not idle — the player is probably still there.
-                        // The Alert state will route us correctly based on actual distance.
                         TransitionTo(CropState.Alert);
                     }
                     break;
@@ -152,8 +152,6 @@ namespace EldritchFarm.Crops
             {
                 lastReactionTime = Time.time;
                 RaiseScream(intensity: pendingScreamIntensity);
-                // Reset for next time. If the next reaction is player-triggered
-                // (not chain-triggered), it should be a fresh full-intensity scream.
                 pendingScreamIntensity = 1f;
             }
         }

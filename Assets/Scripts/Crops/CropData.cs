@@ -109,6 +109,11 @@ namespace EldritchFarm.Crops
         [Tooltip("Seconds the crop is unable to attack again after striking.")]
         public float attackRecoveryDuration = 1.5f;
 
+        [Tooltip("After an aggressive crop strikes and recovers, it's vulnerable and harvestable " +
+                 "for this many seconds. Picks up the pumpkin gameplay loop: bait an attack, dodge, " +
+                 "harvest while it's catching its breath.")]
+        public float harvestWindowDuration = 3f;
+
         [Header("Growth")]
         [Tooltip("Seconds from planting to harvestable.")]
         public float growthTimeSeconds = 30f;

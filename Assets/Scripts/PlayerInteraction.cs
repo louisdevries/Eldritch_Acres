@@ -134,13 +134,22 @@ public class PlayerInteraction : MonoBehaviour
             {
                 cropCount += crop.Harvest();
 
+                // Walk up to the topmost CropBehavior ancestor. Defensive against prefabs
+                // that ended up with CropBehavior on multiple GameObjects (e.g. when
+                // [RequireComponent] auto-added one to a child) — we want to destroy the
+                // whole crop, not just a piece of it.
+                GameObject toDestroy = FindTopmostCropRoot(crop);
+
                 if (HasFarmGrid)
                 {
-                    Vector2Int tile = farmGrid.WorldToGrid(crop.transform.position);
-                    farmGrid.SetTile(tile, FarmGrid.TileState.Tilled);
+                    Vector2Int tile = farmGrid.WorldToGrid(toDestroy.transform.position);
+                    if (farmGrid.GetTile(tile) == FarmGrid.TileState.Occupied)
+                    {
+                        farmGrid.SetTile(tile, FarmGrid.TileState.Tilled);
+                    }
                 }
 
-                Destroy(crop.gameObject);
+                Destroy(toDestroy);
                 return;
             }
         }
@@ -193,6 +202,25 @@ public class PlayerInteraction : MonoBehaviour
         return true;
     }
 
+    /// <summary>
+    /// Walk up the transform hierarchy to find the topmost ancestor that has a
+    /// CropBehavior. This handles malformed prefabs where the same crop has
+    /// CropBehavior components on both root and a child (e.g. from [RequireComponent]
+    /// auto-adding one) — we always want to destroy the whole crop, not a fragment.
+    /// </summary>
+    GameObject FindTopmostCropRoot(CropBehavior startingCrop)
+    {
+        GameObject result = startingCrop.gameObject;
+        Transform t = startingCrop.transform.parent;
+        while (t != null)
+        {
+            if (t.GetComponent<CropBehavior>() != null)
+                result = t.gameObject;
+            t = t.parent;
+        }
+        return result;
+    }
+
     void CycleCrop()
     {
         if (!HasCropPrefabs) return;
@@ -215,9 +243,28 @@ public class PlayerInteraction : MonoBehaviour
         // Copy visual from crop prefab
         GameObject visual = Instantiate(prefab, ghostInstance.transform);
 
-        // Strip gameplay scripts so the ghost doesn't accidentally run AI
-        foreach (var comp in visual.GetComponentsInChildren<MonoBehaviour>())
+        // Strip gameplay scripts. We have to destroy them in *dependency order* —
+        // any component with [RequireComponent(...)] must be destroyed before the
+        // component it requires, otherwise Unity blocks the destroy. Easiest way:
+        // destroy everything except CropBehavior subclasses first, then destroy
+        // CropBehavior subclasses last.
+        var allBehaviours = visual.GetComponentsInChildren<MonoBehaviour>();
+
+        // Pass 1: dependents (visualizers, etc.)
+        foreach (var comp in allBehaviours)
+        {
+            if (comp == null) continue;
+            if (comp is EldritchFarm.Crops.CropBehavior) continue; // skip crops, do them last
             Destroy(comp);
+        }
+
+        // Pass 2: crops themselves
+        foreach (var comp in allBehaviours)
+        {
+            if (comp == null) continue;
+            if (comp is EldritchFarm.Crops.CropBehavior)
+                Destroy(comp);
+        }
 
         // Strip colliders so the ghost doesn't get harvested or block the player
         foreach (var c in visual.GetComponentsInChildren<Collider>())

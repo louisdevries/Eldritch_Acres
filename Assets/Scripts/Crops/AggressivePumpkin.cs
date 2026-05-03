@@ -4,18 +4,17 @@ using EldritchFarm.Player;
 namespace EldritchFarm.Crops
 {
     /// <summary>
-    /// Third concrete crop, and the first aggressive one. Sits passively until the
-    /// player gets close, then telegraphs a strike (windup), commits to attacking
-    /// the player's position at that moment, swings, and recovers.
+    /// Sits passively until the player gets close, then telegraphs a strike, commits
+    /// to attacking the player's position at that moment, swings, and recovers.
     ///
     /// The gameplay is in the telegraph: player has windupDuration seconds to read
     /// the tell and dodge. Movement during windup is the player's only defence.
     ///
-    /// Pressure-tests the framework on:
-    ///   - A new shared state (Striking) on the central enum
-    ///   - Timing-based player interaction (commit-and-swing, not lock-on)
-    ///   - Cross-system communication (PlayerKnockback)
-    ///   - A crop that broadcasts events but subscribes to none (proactive, not reactive)
+    /// Harvestable while exhausted: a mature pumpkin that finishes its post-strike
+    /// recovery enters a Harvestable window — the player can grab it during this
+    /// vulnerable period. Bait the attack → dodge → harvest while it catches its
+    /// breath. If not harvested in time, the pumpkin returns to Idle and is ready
+    /// to attack again.
     /// </summary>
     public class AggressivePumpkin : CropBehavior
     {
@@ -26,19 +25,9 @@ namespace EldritchFarm.Crops
         [Header("Debug")]
         [SerializeField] private bool drawGizmos = true;
 
-        // Where the player was when windup started. Strike checks against this point,
-        // not the player's live position — that's what makes dodging meaningful.
         private Vector3 strikeTargetPosition;
-
-        // Direction the pumpkin is facing for this attack — set when entering Alert
-        // and locked in. Used for both visual tells (gizmo) and the strike cone check.
         private Vector3 facingDirection = Vector3.forward;
-
-        // When the pumpkin last finished a strike. Gates the next attack so the
-        // pumpkin doesn't chain strikes back-to-back.
         private float lastStrikeEndTime = Mathf.NegativeInfinity;
-
-        // Cached knockback receiver on the player.
         private PlayerKnockback playerKnockback;
 
         protected override void OnEnable()
@@ -60,8 +49,6 @@ namespace EldritchFarm.Crops
             }
         }
 
-        // Pumpkin is proactive — it doesn't subscribe to crop events. It only watches
-        // the player. This is a meaningful character distinction; comment left for clarity.
         protected override void SubscribeToEvents()   { }
         protected override void UnsubscribeFromEvents() { }
 
@@ -100,7 +87,6 @@ namespace EldritchFarm.Crops
                     }
                     else
                     {
-                        // Track the player while alert so the windup faces the right way when it starts.
                         FacePlayer();
                     }
                     break;
@@ -109,16 +95,12 @@ namespace EldritchFarm.Crops
                     // Windup — locked in, telegraph the swing.
                     if (stateTimer >= data.windupDuration)
                     {
-                        // Commit to a strike at the player's current position. After this point,
-                        // moving the player no longer changes whether the swing connects.
                         strikeTargetPosition = player != null ? player.position : transform.position;
                         TransitionTo(CropState.Striking);
                     }
                     break;
 
                 case CropState.Striking:
-                    // Strike is active for the duration. The hit is resolved on enter (see OnStateEnter)
-                    // so the player is checked at the moment the strike commits, not every frame.
                     if (stateTimer >= data.strikeDuration)
                     {
                         TransitionTo(CropState.Distressed);
@@ -129,6 +111,20 @@ namespace EldritchFarm.Crops
                     if (stateTimer >= data.attackRecoveryDuration)
                     {
                         lastStrikeEndTime = Time.time;
+                        // Mature pumpkin? Player gets a harvest window. Otherwise back to Idle
+                        // and ready to attack again.
+                        if (IsMature)
+                            TransitionTo(CropState.Harvestable);
+                        else
+                            TransitionTo(CropState.Idle);
+                    }
+                    break;
+
+                case CropState.Harvestable:
+                    // Vulnerable harvest window. If not picked in time, recovers and goes
+                    // back on guard.
+                    if (stateTimer >= data.harvestWindowDuration)
+                    {
                         TransitionTo(CropState.Idle);
                     }
                     break;
@@ -139,13 +135,8 @@ namespace EldritchFarm.Crops
         {
             switch (state)
             {
-                case CropState.Reacting:
-                    // Windup begins — pumpkin is committed but the player still has time to dodge.
-                    break;
-
                 case CropState.Striking:
                     ResolveStrike();
-                    // Announce the strike for any future systems / nearby crops that care.
                     RaiseAttack(facingDirection);
                     break;
             }
@@ -155,11 +146,6 @@ namespace EldritchFarm.Crops
         // Strike resolution
         // -------------------------------------------------------------
 
-        /// <summary>
-        /// Check if the player's locked-in target position falls within the strike cone,
-        /// and apply knockback if so. This runs once when entering Striking — the swing
-        /// either hits or misses based on where the player was when the windup ended.
-        /// </summary>
         private void ResolveStrike()
         {
             if (player == null || data == null) return;
@@ -168,18 +154,13 @@ namespace EldritchFarm.Crops
             toTarget.y = 0f;
             float distance = toTarget.magnitude;
 
-            // Out of range → swing misses.
             if (distance > data.strikeRadius) return;
-            if (distance < 0.001f) return; // sanity: player on top of pumpkin, treat as no direction
+            if (distance < 0.001f) return;
 
-            // Check angle vs facing direction.
             Vector3 toTargetDir = toTarget / distance;
             float angle = Vector3.Angle(facingDirection, toTargetDir);
             if (angle > data.strikeHalfAngleDegrees) return;
 
-            // Hit confirmed. Knockback the player using the *current* player position
-            // (not the locked target) so the push direction feels right even if they tried to dodge.
-            Debug.Log($"[{InstanceId}] HIT! distance={distance:F2} angle={angle:F1}");
             if (playerKnockback != null)
             {
                 Vector3 knockbackDir = (player.position - transform.position);
@@ -199,10 +180,6 @@ namespace EldritchFarm.Crops
         // Helpers
         // -------------------------------------------------------------
 
-        /// <summary>
-        /// Update facing direction toward the player. Called continuously during Alert
-        /// (so the windup starts pointed correctly), but locked once windup begins.
-        /// </summary>
         private void FacePlayer()
         {
             if (player == null) return;
@@ -224,7 +201,6 @@ namespace EldritchFarm.Crops
             Gizmos.color = Color.red;
             Gizmos.DrawWireSphere(transform.position, data.reactionRadius);
 
-            // Strike cone — show the threat zone in front of the pumpkin.
             Vector3 origin = transform.position;
             Vector3 fwd = Application.isPlaying ? facingDirection : transform.forward;
 
@@ -233,7 +209,7 @@ namespace EldritchFarm.Crops
             Vector3 right = Quaternion.Euler(0f,  halfAngle, 0f) * fwd;
 
             Gizmos.color = Application.isPlaying && CurrentState == CropState.Reacting
-                ? Color.magenta // bright while telegraphing
+                ? Color.magenta
                 : new Color(1f, 0f, 0f, 0.3f);
 
             Gizmos.DrawLine(origin, origin + left  * data.strikeRadius);
@@ -241,7 +217,6 @@ namespace EldritchFarm.Crops
             Gizmos.DrawLine(origin + left  * data.strikeRadius,
                             origin + right * data.strikeRadius);
 
-            // Show locked-in target during the strike.
             if (Application.isPlaying && CurrentState == CropState.Striking)
             {
                 Gizmos.color = Color.magenta;

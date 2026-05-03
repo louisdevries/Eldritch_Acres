@@ -8,11 +8,14 @@ namespace EldritchFarm.Crops
     ///   - Current state + state transition plumbing
     ///   - State-change broadcasting (so visuals/audio can react)
     ///   - Harvest contract
+    ///   - Growth timer (how long since planted)
     ///   - Per-instance identity for debugging
     ///
     /// Subclasses (SentryCorn, AggressivePumpkin, SkittishTomato, etc.)
     /// override the OnState* hooks to express their unique behavior, and
     /// subscribe to whichever specific CropEventBus events they care about.
+    /// They also decide *when* their growth + state combination should
+    /// become Harvestable — the base class only tracks maturity, not what to do with it.
     /// </summary>
     public abstract class CropBehavior : MonoBehaviour
     {
@@ -25,20 +28,24 @@ namespace EldritchFarm.Crops
         public CropData Data => data;
         public CropState CurrentState { get; private set; } = CropState.Idle;
 
-        /// <summary>
-        /// Stable per-instance identifier — useful when you have many of the
-        /// same crop type in the scene and need to tell them apart in logs.
-        /// E.g. "Sentry Corn #4172".
-        /// </summary>
         public string InstanceId { get; private set; }
 
         protected float stateTimer;
 
+        // Time since the crop was planted (or since OnEnable, in practice).
+        // Used by subclasses to decide when the crop is mature enough to harvest.
+        protected float ageSeconds;
+
+        /// <summary>
+        /// True once the crop has been alive long enough to be considered grown.
+        /// Subclasses use this in combination with their own state to decide when
+        /// to transition to Harvestable.
+        /// </summary>
+        public bool IsMature => data != null && ageSeconds >= data.growthTimeSeconds;
+
         protected virtual void Awake()
         {
             // Stable per-instance ID, modded down to 4 digits for log readability.
-            // Unity 6 renamed GetInstanceID -> GetEntityId; the directive keeps
-            // this compatible with older Unity versions too.
 #if UNITY_6000_0_OR_NEWER
             int rawId = GetEntityId();
 #else
@@ -62,13 +69,10 @@ namespace EldritchFarm.Crops
         protected virtual void Update()
         {
             stateTimer += Time.deltaTime;
+            ageSeconds += Time.deltaTime;
             TickState(CurrentState);
         }
 
-        /// <summary>
-        /// Request a transition to a new state. Routes through Exit/Enter hooks
-        /// and notifies the event bus so visuals/audio/etc. can react.
-        /// </summary>
         public void TransitionTo(CropState next)
         {
             if (next == CurrentState) return;
