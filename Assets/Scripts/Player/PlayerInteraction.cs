@@ -1,5 +1,6 @@
 using UnityEngine;
 using EldritchFarm.Crops;
+using EldritchFarm.Player;
 
 public class PlayerInteraction : MonoBehaviour
 {
@@ -12,7 +13,7 @@ public class PlayerInteraction : MonoBehaviour
 
     public FarmGrid farmGrid;
 
-    int cropCount = 0;
+    private PlayerWallet wallet;
 
     private GameObject ghostInstance;
     private Renderer ghostRenderer;
@@ -27,6 +28,10 @@ public class PlayerInteraction : MonoBehaviour
 
     void Start()
     {
+        wallet = GetComponent<PlayerWallet>();
+        if (wallet == null)
+            Debug.LogWarning("[PlayerInteraction] No PlayerWallet on the player — planting will be free, harvesting will yield no coins.");
+
         if (ghostPrefab != null)
         {
             ghostInstance = Instantiate(ghostPrefab);
@@ -93,14 +98,24 @@ public class PlayerInteraction : MonoBehaviour
         bool canPlant = CanPlantAt(gridPos);
         var state = farmGrid.GetTile(gridPos);
 
+        // Check affordability of the currently selected crop.
+        bool canAfford = true;
+        if (HasCropPrefabs && wallet != null)
+        {
+            int cost = GetSeedCost(cropPrefabs[currentCropIndex]);
+            canAfford = wallet.CanAfford(cost);
+        }
+
         // Color feedback
         Color color;
         if (state == null)
             color = new Color(1f, 0.5f, 0f, 0.5f); // orange = untilled
         else if (state == FarmGrid.TileState.Occupied)
-            color = new Color(1f, 0f, 0f, 0.5f);   // red
-        else if (canPlant)
-            color = new Color(0f, 1f, 0f, 0.5f);   // green
+            color = new Color(1f, 0f, 0f, 0.5f);   // red = blocked
+        else if (canPlant && canAfford)
+            color = new Color(0f, 1f, 0f, 0.5f);   // green = ready
+        else if (canPlant && !canAfford)
+            color = new Color(0.4f, 0.4f, 1f, 0.5f); // blue = can place but can't afford
         else
             color = new Color(1f, 0f, 0f, 0.5f);
 
@@ -132,7 +147,8 @@ public class PlayerInteraction : MonoBehaviour
 
             if (crop != null && crop.CanHarvest())
             {
-                cropCount += crop.Harvest();
+                int yield = crop.Harvest();
+                if (wallet != null) wallet.Add(yield);
 
                 // Walk up to the topmost CropBehavior ancestor. Defensive against prefabs
                 // that ended up with CropBehavior on multiple GameObjects (e.g. when
@@ -164,6 +180,10 @@ public class PlayerInteraction : MonoBehaviour
         {
             GameObject prefab = cropPrefabs[currentCropIndex];
             if (prefab == null) return;
+
+            // Check seed cost. Skip the spend if there's no wallet (free planting in dev/test).
+            int cost = GetSeedCost(prefab);
+            if (wallet != null && !wallet.TrySpend(cost)) return;
 
             Instantiate(prefab, snappedPos, Quaternion.identity);
             farmGrid.SetTile(gridPos, FarmGrid.TileState.Occupied);
@@ -219,6 +239,19 @@ public class PlayerInteraction : MonoBehaviour
             t = t.parent;
         }
         return result;
+    }
+
+    /// <summary>
+    /// Read the seed cost from a crop prefab's CropData. Returns 0 if the prefab
+    /// is malformed (no CropBehavior or no Data assigned) — better to plant for
+    /// free than to crash the planting flow.
+    /// </summary>
+    int GetSeedCost(GameObject prefab)
+    {
+        if (prefab == null) return 0;
+        var crop = prefab.GetComponentInChildren<CropBehavior>();
+        if (crop == null || crop.Data == null) return 0;
+        return crop.Data.seedCost;
     }
 
     void CycleCrop()
@@ -294,11 +327,23 @@ public class PlayerInteraction : MonoBehaviour
 
     void OnGUI()
     {
+        int y = 10;
+
+        if (wallet != null)
+        {
+            GUI.Label(new Rect(10, y, 300, 20), $"Coins: {wallet.Coins}");
+            y += 20;
+        }
+
         if (HasCropPrefabs && cropPrefabs[currentCropIndex] != null)
         {
-            GUI.Label(new Rect(10, 10, 300, 20),
-                "Selected Crop: " + cropPrefabs[currentCropIndex].name + " (Q to switch)");
+            int cost = GetSeedCost(cropPrefabs[currentCropIndex]);
+            string costLabel = cost > 0 ? $" — {cost} coins" : "";
+            GUI.Label(new Rect(10, y, 400, 20),
+                $"Selected: {cropPrefabs[currentCropIndex].name}{costLabel}  (Q to switch)");
+            y += 20;
         }
-        GUI.Label(new Rect(10, 30, 300, 20), "Harvested: " + cropCount);
+
+        GUI.Label(new Rect(10, y, 300, 20), "E to plant/harvest, F to till");
     }
 }

@@ -14,12 +14,31 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EldritchFarm.Crops.CropData
   cropName: Sentry Corn
   description: 
-  awarenessRadius: 4
-  reactionRadius: 2
+  awarenessRadius: 10
+  reactionRadius: 3
   alertBroadcastRadius: 5
   broadcastsAlerts: 1
   listensToAlerts: 1
   reactionDuration: 2
   cooldownDuration: 1.5
+  rescreamCooldown: 8
+  alertHoldDuration: 3
+  chainIntensityDecay: 0.7
+  chainIntensityThreshold: 0.3
+  fleeSpeed: 3
+  fleeDuration: 1.2
+  harvestableFleeSpeedMultiplier: 0.5
+  harvestableFleeDurationMultiplier: 0.5
+  harvestableReactionRadius: 1
+  visionHalfAngleDegrees: 80
+  visionRotationSpeed: 35
+  windupDuration: 0.6
+  strikeDuration: 0.15
+  strikeRadius: 1.8
+  strikeHalfAngleDegrees: 45
+  strikeKnockback: 8
+  attackRecoveryDuration: 1.5
+  harvestWindowDuration: 3
   growthTimeSeconds: 30
-  yieldAmount: 1
+  yieldAmount: 6
+  seedCost: 5

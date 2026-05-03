@@ -30,11 +30,15 @@ MonoBehaviour:
   harvestableFleeSpeedMultiplier: 0.5
   harvestableFleeDurationMultiplier: 0.5
   harvestableReactionRadius: 1
+  visionHalfAngleDegrees: 80
+  visionRotationSpeed: 35
   windupDuration: 0.6
   strikeDuration: 0.15
   strikeRadius: 2.5
   strikeHalfAngleDegrees: 45
   strikeKnockback: 15
   attackRecoveryDuration: 1.5
-  growthTimeSeconds: 30
-  yieldAmount: 1
+  harvestWindowDuration: 3
+  growthTimeSeconds: 3
+  yieldAmount: 25
+  seedCost: 15

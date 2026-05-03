@@ -239,6 +239,7 @@ GameObject:
   - component: {fileID: 5717128659427138861}
   - component: {fileID: 7447570303150152464}
   - component: {fileID: 3376772440547622817}
+  - component: {fileID: -6324920746835970708}
   m_Layer: 0
   m_Name: SentryCorn_Prefab
   m_TagString: Untagged
@@ -295,7 +296,23 @@ MonoBehaviour:
   idleColor: {r: 1, g: 1, b: 1, a: 1}
   alertColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   reactingColor: {r: 1, g: 0, b: 0, a: 1}
+  strikingColor: {r: 1, g: 0, b: 1, a: 1}
   distressedColor: {r: 1, g: 0.5, b: 0, a: 1}
   harvestableColor: {r: 0, g: 1, b: 0, a: 1}
   spentColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   blendSpeed: 8
+--- !u!114 &-6324920746835970708
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7232918923299216940}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 15e1d6034e15c2b4eb0c562cddd2dea6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EldritchFarm.Crops.CropGrowthVisualizer
+  targetTransform: {fileID: 5717128659427138861}
+  seedlingScale: 0.2
+  lerpSpeed: 4

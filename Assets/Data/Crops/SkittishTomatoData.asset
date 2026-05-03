@@ -27,5 +27,18 @@ MonoBehaviour:
   chainIntensityThreshold: 0.3
   fleeSpeed: 4
   fleeDuration: 1.2
+  harvestableFleeSpeedMultiplier: 0.5
+  harvestableFleeDurationMultiplier: 0.5
+  harvestableReactionRadius: 1
+  visionHalfAngleDegrees: 80
+  visionRotationSpeed: 35
+  windupDuration: 0.6
+  strikeDuration: 0.15
+  strikeRadius: 1.8
+  strikeHalfAngleDegrees: 45
+  strikeKnockback: 8
+  attackRecoveryDuration: 1.5
+  harvestWindowDuration: 3
   growthTimeSeconds: 30
-  yieldAmount: 2
+  yieldAmount: 12
+  seedCost: 8

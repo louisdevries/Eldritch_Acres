@@ -87,6 +87,16 @@ namespace EldritchFarm.Crops
                  "a tomato on the ground won't bolt until the player is right on top of it.")]
         public float harvestableReactionRadius = 1f;
 
+        [Header("Vision (for crops that look in a direction)")]
+        [Tooltip("Half-angle of the vision cone in degrees. 80 means the crop sees a ~160° arc " +
+                 "in front of it. Lower = narrower vision, easier for the player to slip past.")]
+        [Range(15f, 180f)]
+        public float visionHalfAngleDegrees = 80f;
+
+        [Tooltip("How fast the crop's facing rotates (degrees per second) while idle. " +
+                 "0 = static facing. ~30-60 = slow lazy sweep. Higher = aggressive tracking.")]
+        public float visionRotationSpeed = 35f;
+
         [Header("Aggression (for crops that attack)")]
         [Tooltip("Seconds the crop spends winding up before striking. This is the player's " +
                  "window to react and dodge — the telegraph is the gameplay.")]
@@ -121,5 +131,8 @@ namespace EldritchFarm.Crops
         [Header("Harvest")]
         [Tooltip("How many units this crop yields when harvested cleanly.")]
         public int yieldAmount = 1;
+
+        [Tooltip("Cost in coins to plant this crop. Player needs at least this much in their wallet.")]
+        public int seedCost = 5;
     }
 }

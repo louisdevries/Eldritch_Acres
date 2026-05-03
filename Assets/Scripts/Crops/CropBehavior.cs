@@ -37,6 +37,12 @@ namespace EldritchFarm.Crops
         protected float ageSeconds;
 
         /// <summary>
+        /// Public read-only accessor for the crop's age in seconds. Visualizers
+        /// and UI use this for things like growth-progress bars or scale ramps.
+        /// </summary>
+        public float Age => ageSeconds;
+
+        /// <summary>
         /// True once the crop has been alive long enough to be considered grown.
         /// Subclasses use this in combination with their own state to decide when
         /// to transition to Harvestable.
